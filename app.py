@@ -9,7 +9,7 @@ with st.sidebar:
 
     llm_choice = st.radio(
         label="LLM Backend",
-        options=["Google Gemini API", "HuggingFace (Flan-T5)"],
+        options=["Google Gemini API", "HuggingFace (Llama-3.1)"],
         index=0,
         label_visibility="collapsed",
     )
@@ -31,7 +31,7 @@ with st.sidebar:
     if active == "Google Gemini API":
         st.caption("🟢 Active: Google Gemini API")
     else:
-        st.caption("🟡 Active: HuggingFace (Flan-T5)")
+        st.caption("🟡 Active: HuggingFace (Llama-3.1)")
 
     st.divider()
 
@@ -55,10 +55,13 @@ with st.sidebar:
             with open("temp.pdf", "wb") as f:
                 f.write(uploaded_file.getbuffer())
             with st.spinner("Processing / Analyzing PDF..."):
-                st.session_state.vector_store      = process_pdf("temp.pdf")
-                st.session_state.uploaded_filename = uploaded_file.name
-                st.session_state.messages          = []
-            st.success("PDF processed successfully!")
+                try:
+                    st.session_state.vector_store      = process_pdf("temp.pdf")
+                    st.session_state.uploaded_filename = uploaded_file.name
+                    st.session_state.messages          = []
+                    st.success("PDF processed successfully!")
+                except Exception as e:
+                    st.error(f"Error processing PDF: {e}")
         else:
             st.success(f"✅ {uploaded_file.name} ready")
 

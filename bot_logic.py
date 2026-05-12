@@ -22,11 +22,11 @@ CHROMA_DIR = "./chroma_db"
 def _safe_chroma_create(splits, embeddings, persist_directory):
     """
     Create ChromaDB vectorstore. If the existing DB folder is corrupted
-    (old format / missing tenant), wipe it and start fresh automatically.
+    (old format / missing tenant / incompatible version), wipe it and
+    start fresh automatically.
 
-    Root cause: ChromaDB v0.4+ changed its internal storage format.
-    Old `chroma_db` folders created with earlier versions don't have the
-    `default_tenant` structure the new client expects → ValueError on open.
+    Root cause: ChromaDB v0.4+ and subsequent updates changed internal storage
+    formats. Old `chroma_db` folders may cause ValueErrors or KeyErrors.
     Solution: delete the stale folder and recreate it cleanly.
     """
     try:
@@ -35,21 +35,22 @@ def _safe_chroma_create(splits, embeddings, persist_directory):
             embedding=embeddings,
             persist_directory=persist_directory,
         )
-    except ValueError as e:
-        if "tenant" in str(e).lower():
-            # Stale / incompatible DB — wipe and retry once
-            if os.path.exists(persist_directory):
-                shutil.rmtree(persist_directory)
-            return Chroma.from_documents(
-                documents=splits,
-                embedding=embeddings,
-                persist_directory=persist_directory,
-            )
-        raise  # re-raise if it's a different ValueError
+    except (ValueError, KeyError) as e:
+        # Stale / incompatible DB — wipe and retry once
+        if os.path.exists(persist_directory):
+            shutil.rmtree(persist_directory)
+        return Chroma.from_documents(
+            documents=splits,
+            embedding=embeddings,
+            persist_directory=persist_directory,
+        )
 
 
 def process_pdf(pdf_path: str):
     """Load PDF → split → embed with Google embeddings → store in ChromaDB."""
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise ValueError("GOOGLE_API_KEY not found. Please set it in your environment or .env file.")
+
     loader = PyPDFLoader(pdf_path)
     docs   = loader.load()
 
@@ -63,6 +64,9 @@ def process_pdf(pdf_path: str):
 
 def get_answer(vectorstore, question: str) -> str:
     """Retrieve relevant chunks and answer using Google Gemini."""
+    if not os.getenv("GOOGLE_API_KEY"):
+        return "Error: GOOGLE_API_KEY not found. Please set it in your environment or .env file."
+
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.3)
 
     system_prompt = (
