@@ -30,23 +30,21 @@ HF_HEADERS = {
 
 # ── ChromaDB safe create ──────────────────────────────────────────────────────
 def _safe_chroma_create(splits, embeddings, persist_directory):
-    """Auto-wipe corrupted ChromaDB folder and recreate if tenant error occurs."""
+    """Auto-wipe corrupted ChromaDB folder and recreate if errors occur."""
     try:
         return Chroma.from_documents(
             documents=splits,
             embedding=embeddings,
             persist_directory=persist_directory,
         )
-    except ValueError as e:
-        if "tenant" in str(e).lower():
-            if os.path.exists(persist_directory):
-                shutil.rmtree(persist_directory)
-            return Chroma.from_documents(
-                documents=splits,
-                embedding=embeddings,
-                persist_directory=persist_directory,
-            )
-        raise
+    except (ValueError, KeyError) as e:
+        if os.path.exists(persist_directory):
+            shutil.rmtree(persist_directory)
+        return Chroma.from_documents(
+            documents=splits,
+            embedding=embeddings,
+            persist_directory=persist_directory,
+        )
 
 
 # ── PDF Processing ────────────────────────────────────────────────────────────
@@ -66,6 +64,8 @@ def process_pdf(pdf_path: str):
 # ── Q&A ───────────────────────────────────────────────────────────────────────
 def get_answer(vectorstore, question: str) -> str:
     """Retrieve relevant chunks and answer using Llama-3.1 via HF novita provider."""
+    if not os.getenv("HUGGINGFACEHUB_API_TOKEN"):
+        return "Error: HUGGINGFACEHUB_API_TOKEN not found. Please set it in your environment or .env file."
 
     # 1. Retrieve top-4 relevant chunks
     retriever     = vectorstore.as_retriever(search_kwargs={"k": 4})
